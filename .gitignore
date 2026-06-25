@@ -76,3 +76,6 @@ DerivedDataCache/*
 
 # Ignore jetbrains data
 .idea/*
+
+Builds/*
+Build/*

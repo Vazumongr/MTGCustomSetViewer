@@ -30,9 +30,9 @@ struct FMTGCardData
 {
 	GENERATED_BODY();
 
-	FString GetContentForTag(FString InTag)
+	FString GetContentForTag(FString InTag) const
 	{
-		FMTGCardAttribute* foundAttr = Data.FindByPredicate([InTag](const FMTGCardAttribute& attr)
+		const FMTGCardAttribute* foundAttr = Data.FindByPredicate([InTag](const FMTGCardAttribute& attr)
 		{
 			return attr.Tag.Equals(InTag, ESearchCase::IgnoreCase);
 		});

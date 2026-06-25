@@ -7,15 +7,22 @@
 #include "MTGCardDataTypes.h"
 #include "MTGSetViewer.generated.h"
 
-class UVerticalBox;
-class UTileView;
+class USlider;
+class UEditableTextBox;
+class UComboBoxString;
 class UMTGCard;
+class UMTGCardPreview;
 class UMTGCheckboxEntry;
+class UTileView;
+class UVerticalBox;
 
 USTRUCT(BlueprintType)
 struct FFilterSettings
 {
 	GENERATED_BODY()
+
+	FString SearchField;
+	FString SearchText;
 
 	TSet<FString> AllowedSets;
 	TSet<FString> AllowedColors;
@@ -42,23 +49,40 @@ public:
 	void OnColorToggled(UMTGCheckboxEntry* InCheckbox, bool bIsChecked);
 	void OnTypeToggled(UMTGCheckboxEntry* InCheckbox, bool bIsChecked);
 
-private:
+	void CardWidgetCreated(UMTGCard* InCard);
 
+	
+	UFUNCTION()
+	void OnCardClicked(class UMTGCard* ClickedCard);
+
+private:
 	virtual void NativeConstruct() override;
 
 	void ParseXMLData();
 	void PopulateSetsDropdown();
 	void PopulateColorsDropdown();
 	void PopulateTypesDropdown();
+	void PopulateSearchFields();
 	void RebuildView();
 
 	void AddCardData(FMTGCardData& CardData, FString Name, FString Value);
 
 	bool IsCardFiltered(FMTGCardData& InCard);
+	
+	UFUNCTION()
+	void SearchFieldChanged(FString SelectedItem, ESelectInfo::Type SelectionType);
+	
+	UFUNCTION()
+	void SearchTextUpdated(const FText& Text);
+	
+	UFUNCTION()
+	void CardSizeChanged(float Value);
 
 protected:
 	UFUNCTION(BlueprintNativeEvent)
 	void NotifyCardClicked(UMTGCard* ClickedCard);
+
+	FString SetsDirectory;
 	
 	UPROPERTY(Config, BlueprintReadWrite)
 	FString MSESetLocation = TEXT("Test");
@@ -101,4 +125,19 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, VisibleAnywhere)
 	FFilterSettings Filter;
+
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, meta=(BindWidget))
+	TObjectPtr<UComboBoxString> SearchFields;
+
+	UPROPERTY(BlueprintReadOnly, VisibleAnywhere, meta=(BindWidget))
+	TObjectPtr<UEditableTextBox> SearchTextBox;
+
+	UPROPERTY(BlueprintReadWrite, VisibleAnywhere)
+	TSet<FString> DiscoveredAttributes;
+
+	UPROPERTY(BlueprintReadWrite, EditAnywhere)
+	TSubclassOf<UMTGCardPreview> CardPreviewClass;
+
+	UPROPERTY(BlueprintReadWrite, VisibleAnywhere, meta=(BindWidget))
+	TObjectPtr<USlider> CardSizeSlider;
 };

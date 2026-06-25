@@ -3,6 +3,7 @@
 
 #include "MTGCard.h"
 
+#include "MTGSetViewer.h"
 #include "Components/Image.h"
 
 void UMTGCard::NativeOnInitialized()
@@ -25,5 +26,13 @@ void UMTGCard::NativeOnListItemObjectSet(UObject* ListItemObject)
 	IUserObjectListEntry::NativeOnListItemObjectSet(ListItemObject);
 	WidgetData = Cast<UMTGCardWidgetData>(ListItemObject);
 	CardImage->SetBrushResourceObject(WidgetData->ImageTexture);
+	WidgetData->SetViewer->CardWidgetCreated(this);
 	ensure(WidgetData);
+}
+
+FReply UMTGCard::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent)
+{
+	FReply reply = Super::NativeOnMouseButtonDown(InGeometry, InMouseEvent);
+	CardClickedDelegate.Broadcast(this);
+	return reply;
 }

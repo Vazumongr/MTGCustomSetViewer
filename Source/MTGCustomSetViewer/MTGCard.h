@@ -10,6 +10,9 @@
 #include "MTGCard.generated.h"
 
 class UImage;
+class UMTGSetViewer;
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FCardClickedDelegate, class UMTGCard*, ClickedCard);
 
 
 
@@ -27,6 +30,9 @@ public:
 
 	UPROPERTY(BlueprintReadWrite, VisibleAnywhere)
 	FMTGCardData CardData;
+
+	UPROPERTY(BlueprintReadWrite, VisibleAnywhere)
+	UMTGSetViewer* SetViewer;
 };
 
 
@@ -46,6 +52,11 @@ public:
 	virtual void NativePreConstruct() override;
 
 	virtual void NativeOnListItemObjectSet(UObject* ListItemObject) override;
+
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
+
+	UPROPERTY(BlueprintAssignable)
+	FCardClickedDelegate CardClickedDelegate;
 
 
 	UPROPERTY(BlueprintReadWrite, VisibleAnywhere, meta=(BindWidget))

@@ -3,7 +3,6 @@
 
 #include "MTGSetViewer.h"
 
-#include "EditorAssetLibrary.h"
 #include "ImageUtils.h"
 #include "MTGCard.h"
 #include "MTGCheckboxEntry.h"
@@ -14,7 +13,10 @@
 #include "Engine/ObjectLibrary.h"
 #include "HAL/FileManagerGeneric.h"
 #include "MTGCheckboxEntry.h"
-
+#include "Components/ComboBoxString.h"
+#include "Components/EditableTextBox.h"
+#include "MTGCardPreview.h"
+#include "Components/Slider.h"
 
 void UMTGSetViewer::NativeConstruct()
 {
@@ -24,13 +26,27 @@ void UMTGSetViewer::NativeConstruct()
 	PopulateSetsDropdown();
 	PopulateColorsDropdown();
 	PopulateTypesDropdown();
+	PopulateSearchFields();
+
+	SearchTextBox->OnTextChanged.AddDynamic(this, &UMTGSetViewer::SearchTextUpdated);
+	CardSizeSlider->OnValueChanged.AddDynamic(this, &UMTGSetViewer::CardSizeChanged);
 
 	UE_LOG(LogTemp, Warning, TEXT("Hi"));
 }
 
 void UMTGSetViewer::ParseXMLData()
 {
-	FString setsDirectory = FPaths::ProjectSavedDir() + TEXT("/Sets/");
+// #if WITH_EDITOR
+// 	FString setsDirectory = FPaths::ProjectSavedDir() + TEXT("/Sets/");
+// #else
+// 	FString setsDirectory = FString::Printf(TEXT("../../../")) + TEXT("/Sets/");
+// #
+#if WITH_EDITOR
+	SetsDirectory = FPaths::ProjectSavedDir() + TEXT("/Sets/");
+#else
+	SetsDirectory = FString::Printf(TEXT("../../../")) + TEXT("/Sets/");
+#endif
+	UE_LOG(LogTemp, Warning, TEXT("%s"), *SetsDirectory);
 	FString FileExtension = TEXT("");
 
 	//FString fileName = FPaths::ProjectSavedDir() + "/Sets/MyNewSet/setGlorbo.xml";
@@ -39,13 +55,15 @@ void UMTGSetViewer::ParseXMLData()
 	TArray<FString> setDirectories;
 	IFileManager& fileManager = FFileManagerGeneric::Get();
 
-	fileManager.FindFiles(setDirectories, *(setsDirectory + TEXT("*.*")), false, true);
+	fileManager.FindFiles(setDirectories, *(SetsDirectory + TEXT("*.*")), false, true);
 
 	for (FString setDir : setDirectories)
 	{
 		FMTGCardSet cardSet = FMTGCardSet(setDir);
-		FString setDataPath = FPaths::ProjectSavedDir() + FString::Printf(TEXT("/Sets/%s/%s.xml"), *setDir, *setDir);
-		FString setImagesPath = FPaths::ProjectSavedDir() + FString::Printf(TEXT("/Sets/%s/%s-files/"), *setDir, *setDir);
+		// FString setDataPath = FPaths::ProjectSavedDir() + FString::Printf(TEXT("/Sets/%s/%s.xml"), *setDir, *setDir);
+		// FString setImagesPath = FPaths::ProjectSavedDir() + FString::Printf(TEXT("/Sets/%s/%s-files/"), *setDir, *setDir);
+		FString setDataPath = SetsDirectory + FString::Printf(TEXT("/%s/%s.xml"), *setDir, *setDir);
+		FString setImagesPath = SetsDirectory + FString::Printf(TEXT("/%s/%s-files/"), *setDir, *setDir);
 
 		UE_LOG(LogTemp, Warning, TEXT("%s"), *setDataPath);
 
@@ -88,7 +106,7 @@ void UMTGSetViewer::ParseXMLData()
 							//cardData.Data.Emplace(cardDataNode->GetTag(), cardDataNode->GetContent());
 							AddCardData(cardData, cardDataNode->GetTag(), cardDataNode->GetContent());
 						}
-						else if (!cardDataNode->GetChildrenNodes().IsEmpty())
+						if (!cardDataNode->GetChildrenNodes().IsEmpty())
 						{
 							for (auto* subData : cardDataNode->GetChildrenNodes())
 							{
@@ -96,7 +114,7 @@ void UMTGSetViewer::ParseXMLData()
 								AddCardData(cardData, subData->GetTag(), subData->GetContent());
 							}
 						}
-						else if (!cardDataNode->GetAttributes().IsEmpty())
+						if (!cardDataNode->GetAttributes().IsEmpty())
 						{
 							for (const auto subData : cardDataNode->GetAttributes())
 							{
@@ -111,7 +129,12 @@ void UMTGSetViewer::ParseXMLData()
 				break;
 			}
 		}
-
+		
+		Sets.Add(cardSet);
+		Filter.AllowedSets.Add(cardSet.SetName);
+		Filter.ExistingSets.Add(cardSet.SetName);
+		continue;
+/*
 		auto copy = cards;
 
 		for (auto card : cards)
@@ -119,6 +142,7 @@ void UMTGSetViewer::ParseXMLData()
 			UMTGCardWidgetData* widgetData = NewObject<UMTGCardWidgetData>();
 			widgetData->CardData = card;
 			widgetData->test = TEXT("isahjdjlkashdjkasd");
+			widgetData->SetViewer = this;
 			FString cardName = card.GetContentForTag(TEXT("name"));
 			FString imagePath = setImagesPath + cardName + TEXT(".png");
 
@@ -138,7 +162,9 @@ void UMTGSetViewer::ParseXMLData()
 		Sets.Add(cardSet);
 		Filter.AllowedSets.Add(cardSet.SetName);
 		Filter.ExistingSets.Add(cardSet.SetName);
+		*/
 	}
+	RebuildView();
 	UE_LOG(LogTemp, Warning, TEXT("Hi"));
 }
 
@@ -152,6 +178,19 @@ void UMTGSetViewer::PopulateTypesDropdown()
 		checkboxEntry->CheckboxToggled.AddUObject(this, &UMTGSetViewer::OnTypeToggled);
 		TypesDropDown->AddChildToVerticalBox(checkboxEntry);
 	}
+}
+
+void UMTGSetViewer::PopulateSearchFields()
+{
+	SearchFields->ClearOptions();
+	SearchFields->AddOption(TEXT("All Fields"));
+	SearchFields->SetSelectedOption(TEXT("All Fields"));
+	Filter.SearchField = TEXT("All Fields");
+	for (FString attribute : DiscoveredAttributes)
+	{
+		SearchFields->AddOption(attribute);
+	}
+	SearchFields->OnSelectionChanged.AddDynamic(this, &UMTGSetViewer::SearchFieldChanged);
 }
 
 void UMTGSetViewer::PopulateColorsDropdown()
@@ -181,6 +220,7 @@ void UMTGSetViewer::PopulateSetsDropdown()
 void UMTGSetViewer::RebuildView()
 {
 	CardTileView->ClearListItems();
+	TArray<UMTGCardWidgetData*> widgetDataArray;
 	for (auto& set : Sets)
 	{
 		if (set.bActive == false)
@@ -193,11 +233,14 @@ void UMTGSetViewer::RebuildView()
 			{
 				continue;
 			}
-			FString setDataPath = FPaths::ProjectSavedDir() + FString::Printf(TEXT("/Sets/%s/%s.xml"), *set.SetName, *set.SetName);
-			FString setImagesPath = FPaths::ProjectSavedDir() + FString::Printf(TEXT("/Sets/%s/%s-files/"), *set.SetName, *set.SetName);
+			// FString setDataPath = FPaths::ProjectSavedDir() + FString::Printf(TEXT("/Sets/%s/%s.xml"), *set.SetName, *set.SetName);
+			// FString setImagesPath = FPaths::ProjectSavedDir() + FString::Printf(TEXT("/Sets/%s/%s-files/"), *set.SetName, *set.SetName);
+			FString setDataPath = SetsDirectory + FString::Printf(TEXT("/%s/%s.xml"), *set.SetName, *set.SetName);
+			FString setImagesPath = SetsDirectory + FString::Printf(TEXT("/%s/%s-files/"), *set.SetName, *set.SetName);
 			UMTGCardWidgetData* widgetData = NewObject<UMTGCardWidgetData>();
 			widgetData->CardData = card;
 			widgetData->test = TEXT("isahjdjlkashdjkasd");
+			widgetData->SetViewer = this;
 			FString cardName = card.GetContentForTag(TEXT("name"));
 			FString imagePath = setImagesPath + cardName + TEXT(".png");
 
@@ -212,14 +255,21 @@ void UMTGSetViewer::RebuildView()
 			CardTileView->SetEntryHeight(imageSize.Y);
 			CardTileView->SetEntryWidth(imageSize.X);
 			widgetData->test = TEXT("dahsjdhaslkdj;");
-			CardTileView->AddItem(widgetData);
+			widgetDataArray.Add(widgetData);
 		}
 	}
+	widgetDataArray.Sort([](const UMTGCardWidgetData& cardOne, const UMTGCardWidgetData& cardTwo)
+	{
+		return cardOne.CardData.GetContentForTag(TEXT("name")) > cardTwo.CardData.GetContentForTag(TEXT("name"));
+	});
+	CardTileView->SetListItems(widgetDataArray);
 }
 
 void UMTGSetViewer::AddCardData(FMTGCardData& CardData, FString Name, FString Value)
 {
+	Value = Value.Replace(TEXT("&apos;"), TEXT("'"));
 	CardData.Data.Emplace(Name, Value);
+	DiscoveredAttributes.Add(Name);
 	if (Name.Equals(TEXT("colors"), ESearchCase::IgnoreCase))
 	{
 		for (TCHAR Ch : Value)
@@ -254,7 +304,33 @@ bool UMTGSetViewer::IsCardFiltered(FMTGCardData& InCard)
 	FString rarity = InCard.GetContentForTag(TEXT("RARITY"));
 	FString type = InCard.GetContentForTag(TEXT("TYPE"));
 
-	if (!Filter.AllowedRarities.Contains(rarity))
+	if (!Filter.SearchText.IsEmpty())
+	{
+		if (!Filter.SearchField.Equals(TEXT("All Fields"), ESearchCase::IgnoreCase))
+		{
+			FString content = InCard.GetContentForTag(Filter.SearchField);
+			return !content.Contains(Filter.SearchText, ESearchCase::IgnoreCase);
+		}
+		
+		for (auto attr : InCard.Data)
+		{
+			FString test = TEXT("difuk");
+			FString es = TEXT("g");
+			bool be = test.Contains(es, ESearchCase::IgnoreCase);
+			bool bebebe = attr.Content.Contains(Filter.SearchText, ESearchCase::IgnoreCase);
+			FString mystr = FString::Printf(TEXT("%s %s %s"), *attr.Content, *Filter.SearchText, bebebe ? TEXT("true") : TEXT("false"));
+			UE_LOG(LogTemp, Warning, TEXT("%s"), *mystr);
+			if (attr.Content.Contains(Filter.SearchText, ESearchCase::IgnoreCase))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("%s contains %s!!!"), *attr.Content, *Filter.SearchText);
+				return false;
+			}
+		}
+		return true;
+	}
+
+	// Empty rarity means no rarity, ergo let it through.
+	if (!Filter.AllowedRarities.Contains(rarity) && rarity != TEXT(""))
 	{
 		return true;
 	}
@@ -275,18 +351,28 @@ bool UMTGSetViewer::IsCardFiltered(FMTGCardData& InCard)
 		return true;
 	}
 	
-
-	for (auto color : colors)
-	{
-		FString col = FString(1, &color);
-		bool result = Filter.AllowedColors.Contains(&color);
-		if (result)
-		{
-			return false;
-		}
-		return true;
-	}
 	return false;
+}
+
+void UMTGSetViewer::SearchFieldChanged(FString SelectedItem, ESelectInfo::Type SelectionType)
+{
+	Filter.SearchField = SelectedItem;
+	RebuildView();
+}
+
+void UMTGSetViewer::SearchTextUpdated(const FText& Text)
+{
+	Filter.SearchText = Text.ToString();
+	RebuildView();
+}
+
+void UMTGSetViewer::CardSizeChanged(float Value)
+{
+	EntryScale = Value;
+	auto imageSize = FVector2D(750,1030) * EntryScale;
+	CardTileView->SetEntryHeight(imageSize.Y);
+	CardTileView->SetEntryWidth(imageSize.X);
+	CardTileView->RequestRefresh();
 }
 
 
@@ -346,4 +432,20 @@ void UMTGSetViewer::OnTypeToggled(UMTGCheckboxEntry* InCheckbox, bool bIsChecked
 		Filter.AllowedTypes.Remove(toggledType);
 	}
 	RebuildView();
+}
+
+void UMTGSetViewer::CardWidgetCreated(UMTGCard* InCard)
+{
+	if (InCard->CardClickedDelegate.IsAlreadyBound(this, &UMTGSetViewer::OnCardClicked))
+	{
+		return;
+	}
+	InCard->CardClickedDelegate.AddDynamic(this, &UMTGSetViewer::OnCardClicked);
+}
+
+void UMTGSetViewer::OnCardClicked(class UMTGCard* ClickedCard)
+{
+	UMTGCardPreview* cardPreview = CreateWidget<UMTGCardPreview>(GetOwningPlayer(), CardPreviewClass);
+	cardPreview->InitCardData(ClickedCard);
+	cardPreview->AddToViewport();
 }
