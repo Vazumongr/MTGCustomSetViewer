@@ -220,6 +220,7 @@ void UMTGSetViewer::PopulateSetsDropdown()
 void UMTGSetViewer::RebuildView()
 {
 	CardTileView->ClearListItems();
+ // TODO: No need to rebuild the widget data. we can keep all these in memory and just adjust the ones sent to the view. Unnecessarily creating textures. 
 	TArray<UMTGCardWidgetData*> widgetDataArray;
 	for (auto& set : Sets)
 	{
