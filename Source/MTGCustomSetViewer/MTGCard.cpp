@@ -36,3 +36,8 @@ FReply UMTGCard::NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPoi
 	CardClickedDelegate.Broadcast(this);
 	return reply;
 }
+
+void UMTGCard::ForceRefreshImage()
+{
+	CardImage->SetBrushResourceObject(WidgetData->ImageTexture);
+}

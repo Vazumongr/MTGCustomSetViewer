@@ -55,6 +55,8 @@ public:
 
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& InGeometry, const FPointerEvent& InMouseEvent) override;
 
+	void ForceRefreshImage();
+
 	UPROPERTY(BlueprintAssignable)
 	FCardClickedDelegate CardClickedDelegate;
 

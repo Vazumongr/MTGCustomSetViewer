@@ -315,6 +315,24 @@ void UMTGSetViewer::HandleImageRequest(TSharedPtr<IHttpRequest> HttpRequest, TSh
 						if (WidgetData.IsValid())
 						{
 							WidgetData->ImageTexture = Texture;
+							TArray<UUserWidget*> entryWidgets = CardTileView->GetDisplayedEntryWidgets();
+							UUserWidget** widget = entryWidgets.FindByPredicate([&WidgetData](const UUserWidget* Card)
+							{
+								if (WidgetData.IsValid())
+								{
+									return Cast<UMTGCard>(Card)->WidgetData == WidgetData.Get();
+								}
+								return false;
+							});
+
+							if (widget)
+							{
+								UMTGCard* cardWidget = Cast<UMTGCard>(*widget);
+								if (IsValid(cardWidget))
+								{
+									cardWidget->ForceRefreshImage();
+								}
+							}
 						}
 						return;
 					}
