@@ -24,7 +24,7 @@ class UMTGCardWidgetData : public UObject
 public:
 
 	UPROPERTY()
-	UTexture2D* ImageTexture;
+	UTexture* ImageTexture;
 
 	FString test;
 

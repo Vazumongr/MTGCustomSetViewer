@@ -7,11 +7,14 @@
 #include "MTGCardDataTypes.h"
 #include "MTGSetViewer.generated.h"
 
+class IHttpResponse;
+class IHttpRequest;
 class USlider;
 class UEditableTextBox;
 class UComboBoxString;
 class UMTGCard;
 class UMTGCardPreview;
+class UMTGCardWidgetData;
 class UMTGCheckboxEntry;
 class UTileView;
 class UVerticalBox;
@@ -64,6 +67,8 @@ private:
 	void PopulateTypesDropdown();
 	void PopulateSearchFields();
 	void RebuildView();
+	void HandleImageRequest(TSharedPtr<IHttpRequest> HttpRequest, TSharedPtr<IHttpResponse> HttpResponse, bool bArg, TWeakObjectPtr<UMTGCardWidgetData> WidgetData);
+	void GenerateWidgetData();
 
 	void AddCardData(FMTGCardData& CardData, FString Name, FString Value);
 
@@ -82,6 +87,12 @@ protected:
 	UFUNCTION(BlueprintNativeEvent)
 	void NotifyCardClicked(UMTGCard* ClickedCard);
 
+	UPROPERTY()
+	TArray<UMTGCardWidgetData*> WidgetDataArray;
+
+	UPROPERTY()
+	TSet<FMTGCardData> Cards;
+	
 	FString SetsDirectory;
 	
 	UPROPERTY(Config, BlueprintReadWrite)

@@ -20,6 +20,17 @@ struct FMTGCardAttribute
 	{
 		
 	}
+
+	bool operator==(const FMTGCardAttribute& Other) const
+	{
+		return Other.Tag == Tag && Other.Content == Content;
+	}
+
+	
+	friend uint32 GetTypeHash(const FMTGCardAttribute& CardAttribute)
+	{
+		return HashCombine(GetTypeHash(CardAttribute.Tag), GetTypeHash(CardAttribute.Content));
+	}
 	
 	FString Tag;
 	FString Content;
@@ -42,6 +53,16 @@ struct FMTGCardData
 			return TEXT("");
 		}
 		return foundAttr->Content;
+	}
+
+	bool operator==(const FMTGCardData& Other) const
+	{
+		return Other.Data == Data;
+	}
+
+	friend uint32 GetTypeHash(const FMTGCardData& CardData)
+	{
+		return GetTypeHash(CardData.Data);
 	}
 
 	UPROPERTY()

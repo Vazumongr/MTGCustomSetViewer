@@ -8,7 +8,9 @@ public class MTGCustomSetViewer : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "XmlParser", "SlateCore" });
+		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput", "UMG", "XmlParser", "SlateCore", "HTTP", "ImageWrapper", "RHI", 
+			"RenderCore",
+			"Renderer",});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {});
 

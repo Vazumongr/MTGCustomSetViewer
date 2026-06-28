@@ -3,6 +3,9 @@
 
 #include "MTGSetViewer.h"
 
+#include "HttpModule.h"
+#include "IImageWrapper.h"
+#include "IImageWrapperModule.h"
 #include "ImageUtils.h"
 #include "MTGCard.h"
 #include "MTGCheckboxEntry.h"
@@ -17,6 +20,9 @@
 #include "Components/EditableTextBox.h"
 #include "MTGCardPreview.h"
 #include "Components/Slider.h"
+#include "Engine/Texture2DDynamic.h"
+#include "Interfaces/IHttpRequest.h"
+#include "Interfaces/IHttpResponse.h"
 
 void UMTGSetViewer::NativeConstruct()
 {
@@ -49,9 +55,6 @@ void UMTGSetViewer::ParseXMLData()
 	UE_LOG(LogTemp, Warning, TEXT("%s"), *SetsDirectory);
 	FString FileExtension = TEXT("");
 
-	//FString fileName = FPaths::ProjectSavedDir() + "/Sets/MyNewSet/setGlorbo.xml";
-	//FString imagesDirectory = FPaths::ProjectSavedDir() + TEXT("/Sets/MyNewSet/setGlorbo-files/");
-
 	TArray<FString> setDirectories;
 	IFileManager& fileManager = FFileManagerGeneric::Get();
 
@@ -60,8 +63,6 @@ void UMTGSetViewer::ParseXMLData()
 	for (FString setDir : setDirectories)
 	{
 		FMTGCardSet cardSet = FMTGCardSet(setDir);
-		// FString setDataPath = FPaths::ProjectSavedDir() + FString::Printf(TEXT("/Sets/%s/%s.xml"), *setDir, *setDir);
-		// FString setImagesPath = FPaths::ProjectSavedDir() + FString::Printf(TEXT("/Sets/%s/%s-files/"), *setDir, *setDir);
 		FString setDataPath = SetsDirectory + FString::Printf(TEXT("/%s/%s.xml"), *setDir, *setDir);
 		FString setImagesPath = SetsDirectory + FString::Printf(TEXT("/%s/%s-files/"), *setDir, *setDir);
 
@@ -88,9 +89,8 @@ void UMTGSetViewer::ParseXMLData()
 			return;
 		}
 
-		const FXmlNode* cardsNode = nullptr;
-
 		TArray<FMTGCardData>& cards = cardSet.Cards;
+		FString duplicateCardsString = FString(TEXT(""));
 
 		for (auto* node : rootNode->GetChildrenNodes())
 		{
@@ -103,14 +103,12 @@ void UMTGSetViewer::ParseXMLData()
 					{
 						if (!cardDataNode->GetContent().IsEmpty())
 						{
-							//cardData.Data.Emplace(cardDataNode->GetTag(), cardDataNode->GetContent());
 							AddCardData(cardData, cardDataNode->GetTag(), cardDataNode->GetContent());
 						}
 						if (!cardDataNode->GetChildrenNodes().IsEmpty())
 						{
 							for (auto* subData : cardDataNode->GetChildrenNodes())
 							{
-								//cardData.Data.Emplace(subData->GetTag(), subData->GetContent());
 								AddCardData(cardData, subData->GetTag(), subData->GetContent());
 							}
 						}
@@ -118,52 +116,32 @@ void UMTGSetViewer::ParseXMLData()
 						{
 							for (const auto subData : cardDataNode->GetAttributes())
 							{
-								//cardData.Data.Emplace(subData.GetTag(), subData.GetValue());
 								AddCardData(cardData, subData.GetTag(), subData.GetValue());
 							}
 						}
 					}
+					if (Cards.Contains(cardData))
+					{
+						duplicateCardsString += cardData.GetContentForTag(TEXT("name")) + TEXT(" ");
+						continue;
+					}
+					Cards.Add(cardData);
 					cards.Add(cardData);
-					auto copyFoRbeakpoint = cardData;
 				}
 				break;
 			}
 		}
 		
-		Sets.Add(cardSet);
-		Filter.AllowedSets.Add(cardSet.SetName);
-		Filter.ExistingSets.Add(cardSet.SetName);
-		continue;
-/*
-		auto copy = cards;
-
-		for (auto card : cards)
+		if (!duplicateCardsString.IsEmpty())
 		{
-			UMTGCardWidgetData* widgetData = NewObject<UMTGCardWidgetData>();
-			widgetData->CardData = card;
-			widgetData->test = TEXT("isahjdjlkashdjkasd");
-			widgetData->SetViewer = this;
-			FString cardName = card.GetContentForTag(TEXT("name"));
-			FString imagePath = setImagesPath + cardName + TEXT(".png");
-
-			FImage cardImage;
-			FImageUtils::LoadImage(*imagePath, cardImage);
-
-			UTexture2D* cardTexture = FImageUtils::CreateTexture2DFromImage(cardImage);
-
-			widgetData->ImageTexture = cardTexture;
-
-			auto imageSize = FVector2D(750,1030) * EntryScale;
-			CardTileView->SetEntryHeight(imageSize.Y);
-			CardTileView->SetEntryWidth(imageSize.X);
-			widgetData->test = TEXT("dahsjdhaslkdj;");
-			CardTileView->AddItem(widgetData);
+			UE_LOG(LogTemp, Warning, TEXT("Duplicate cards found: %s"), *duplicateCardsString);
 		}
+		
 		Sets.Add(cardSet);
 		Filter.AllowedSets.Add(cardSet.SetName);
 		Filter.ExistingSets.Add(cardSet.SetName);
-		*/
 	}
+	GenerateWidgetData();
 	RebuildView();
 	UE_LOG(LogTemp, Warning, TEXT("Hi"));
 }
@@ -217,10 +195,55 @@ void UMTGSetViewer::PopulateSetsDropdown()
 	}
 }
 
+void UMTGSetViewer::GenerateWidgetData()
+{
+	for (auto& set : Sets)
+	{
+		for (auto card : set.Cards)
+		{
+			FString setDataPath = SetsDirectory + FString::Printf(TEXT("/%s/%s.xml"), *set.SetName, *set.SetName);
+			FString setImagesPath = SetsDirectory + FString::Printf(TEXT("/%s/%s-files/"), *set.SetName, *set.SetName);
+			UMTGCardWidgetData* widgetData = NewObject<UMTGCardWidgetData>();
+			widgetData->CardData = card;
+			widgetData->test = TEXT("isahjdjlkashdjkasd");
+			widgetData->SetViewer = this;
+			FString cardName = card.GetContentForTag(TEXT("name"));
+			FString imagePathPng = setImagesPath + cardName + TEXT(".png");
+			FString imagePathJpg = setImagesPath + cardName + TEXT(".jpg");
+
+			auto imageSize = FVector2D(750,1030) * EntryScale;
+			CardTileView->SetEntryHeight(imageSize.Y);
+			CardTileView->SetEntryWidth(imageSize.X);
+			widgetData->test = TEXT("dahsjdhaslkdj;");
+			WidgetDataArray.Add(widgetData);
+			
+			FImage cardImage;
+			// Check PNG first, fallback to JPG if PNG fails.
+			if (!FImageUtils::LoadImage(*imagePathPng, cardImage))
+			{
+				// If JPG fails, check for picURL
+				if (!FImageUtils::LoadImage(*imagePathJpg, cardImage))
+				{
+					FString picURL = card.GetContentForTag(TEXT("picURL"));
+					TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
+
+					HttpRequest->OnProcessRequestComplete().BindUObject(this, &UMTGSetViewer::HandleImageRequest, TWeakObjectPtr<UMTGCardWidgetData>(widgetData));
+					HttpRequest->SetURL(picURL);
+					HttpRequest->SetVerb(TEXT("GET"));
+					HttpRequest->ProcessRequest();
+					continue;
+				}
+			}
+
+			UTexture2D* cardTexture = FImageUtils::CreateTexture2DFromImage(cardImage);
+			widgetData->ImageTexture = cardTexture;
+		}
+	}
+}
+
 void UMTGSetViewer::RebuildView()
 {
 	CardTileView->ClearListItems();
- // TODO: No need to rebuild the widget data. we can keep all these in memory and just adjust the ones sent to the view. Unnecessarily creating textures. 
 	TArray<UMTGCardWidgetData*> widgetDataArray;
 	for (auto& set : Sets)
 	{
@@ -234,29 +257,12 @@ void UMTGSetViewer::RebuildView()
 			{
 				continue;
 			}
-			// FString setDataPath = FPaths::ProjectSavedDir() + FString::Printf(TEXT("/Sets/%s/%s.xml"), *set.SetName, *set.SetName);
-			// FString setImagesPath = FPaths::ProjectSavedDir() + FString::Printf(TEXT("/Sets/%s/%s-files/"), *set.SetName, *set.SetName);
-			FString setDataPath = SetsDirectory + FString::Printf(TEXT("/%s/%s.xml"), *set.SetName, *set.SetName);
-			FString setImagesPath = SetsDirectory + FString::Printf(TEXT("/%s/%s-files/"), *set.SetName, *set.SetName);
-			UMTGCardWidgetData* widgetData = NewObject<UMTGCardWidgetData>();
-			widgetData->CardData = card;
-			widgetData->test = TEXT("isahjdjlkashdjkasd");
-			widgetData->SetViewer = this;
-			FString cardName = card.GetContentForTag(TEXT("name"));
-			FString imagePath = setImagesPath + cardName + TEXT(".png");
-
-			FImage cardImage;
-			FImageUtils::LoadImage(*imagePath, cardImage);
-
-			UTexture2D* cardTexture = FImageUtils::CreateTexture2DFromImage(cardImage);
-
-			widgetData->ImageTexture = cardTexture;
-
-			auto imageSize = FVector2D(750,1030) * EntryScale;
-			CardTileView->SetEntryHeight(imageSize.Y);
-			CardTileView->SetEntryWidth(imageSize.X);
-			widgetData->test = TEXT("dahsjdhaslkdj;");
-			widgetDataArray.Add(widgetData);
+			UMTGCardWidgetData** widgetData = WidgetDataArray.FindByPredicate([card](const auto& widgetData)
+			{
+				return widgetData->CardData == card;
+			});
+			check(widgetData)
+			widgetDataArray.Add(*widgetData);
 		}
 	}
 	widgetDataArray.Sort([](const UMTGCardWidgetData& cardOne, const UMTGCardWidgetData& cardTwo)
@@ -264,6 +270,58 @@ void UMTGSetViewer::RebuildView()
 		return cardOne.CardData.GetContentForTag(TEXT("name")) > cardTwo.CardData.GetContentForTag(TEXT("name"));
 	});
 	CardTileView->SetListItems(widgetDataArray);
+}
+
+void UMTGSetViewer::HandleImageRequest(TSharedPtr<IHttpRequest> HttpRequest, TSharedPtr<IHttpResponse> HttpResponse, bool bSucceeded, TWeakObjectPtr<UMTGCardWidgetData> WidgetData)
+{
+	if ( bSucceeded && HttpResponse.IsValid() && EHttpResponseCodes::IsOk(HttpResponse->GetResponseCode()) &&
+		 HttpResponse->GetContentLength() > 0 && HttpResponse->GetContent().Num() > 0 )
+	{
+		IImageWrapperModule& ImageWrapperModule = FModuleManager::LoadModuleChecked<IImageWrapperModule>(FName("ImageWrapper"));
+		TSharedPtr<IImageWrapper> ImageWrappers[3] =
+		{
+			ImageWrapperModule.CreateImageWrapper(EImageFormat::PNG),
+			ImageWrapperModule.CreateImageWrapper(EImageFormat::JPEG),
+			ImageWrapperModule.CreateImageWrapper(EImageFormat::BMP),
+		};
+
+		for ( auto ImageWrapper : ImageWrappers )
+		{
+			if ( ImageWrapper.IsValid() && 
+				 ImageWrapper->SetCompressed(HttpResponse->GetContent().GetData(), HttpResponse->GetContent().Num()) &&
+				 ImageWrapper->GetWidth() <= TNumericLimits<int32>::Max() && 
+				 ImageWrapper->GetHeight() <= TNumericLimits<int32>::Max())
+			{
+				
+				TArray64<uint8> RawData;
+				const ERGBFormat InFormat = ERGBFormat::BGRA;
+				if ( ImageWrapper->GetRaw(InFormat, 8, RawData) )
+				{					
+					if ( UTexture2DDynamic* Texture = UTexture2DDynamic::Create(static_cast<int32>(ImageWrapper->GetWidth()), static_cast<int32>(ImageWrapper->GetHeight())) )
+					{
+						Texture->SRGB = true;
+						Texture->UpdateResource();
+
+						FTexture2DDynamicResource* TextureResource = static_cast<FTexture2DDynamicResource*>(Texture->GetResource());
+						if (TextureResource)
+						{
+							ENQUEUE_RENDER_COMMAND(FWriteRawDataToTexture)(
+								[TextureResource, RawData = MoveTemp(RawData)](FRHICommandListImmediate& RHICmdList)
+								{
+									TextureResource->WriteRawToTexture_RenderThread(RawData);
+								});
+						}
+						
+						if (WidgetData.IsValid())
+						{
+							WidgetData->ImageTexture = Texture;
+						}
+						return;
+					}
+				}
+			}
+		}
+	}
 }
 
 void UMTGSetViewer::AddCardData(FMTGCardData& CardData, FString Name, FString Value)
