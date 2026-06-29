@@ -6,6 +6,9 @@ A tool designed to allow the viewing of custom Magic the Gathering decks. It is 
 ### What is it not?
 It is not an MTG game. It is not a tool for making MTG cards or decks. It is purely for viewing existing made decks.
 
+### What do I need?
+A copy of the latest release of this application, a Cockatrice V2.2 XML file, and either a) the images for the cards already prepared such as with a tool like MSE or, b) a URL to the image online such as with a tool like mtg.design. That's it.
+
 ### How do I use it?
 First, go to releases and download the latest Windows release.
 
